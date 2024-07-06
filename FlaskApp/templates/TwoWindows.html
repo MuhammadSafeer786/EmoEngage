@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotion Detection</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script>
+        $(document).ready(function(){
+            function updateGraph() {
+                $('#graph').attr('src', '/emotion_graph?' + new Date().getTime());
+            }
+            setInterval(updateGraph, 5000); // Update graph every 5 seconds
+        });
+    </script>
+</head>
+<body>
+    <h1>Emotion Detection</h1>
+    <div style="display: flex; justify-content: space-around;">
+        <div>
+            <h2>Webcam Feed</h2>
+            <img src="{{ url_for('video_feed') }}" alt="Webcam Feed" width="640" height="480">
+        </div>
+        <div>
+            <h2>Emotion Graph</h2>
+            <img id="graph" src="{{ url_for('emotion_graph') }}" alt="Emotion Graph" width="640" height="480">
+        </div>
+    </div>
+</body>
+</html>

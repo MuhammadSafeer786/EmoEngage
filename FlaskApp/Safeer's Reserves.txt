@@ -1,0 +1,1129 @@
+
+
+
+######################################################################
+        Slow Frame Rate but successfull and no graph
+######################################################################
+
+
+
+import eventlet.wsgi
+from flask import Flask, render_template, Response
+import cv2
+from deepface import DeepFace
+import time
+import numpy as np
+import matplotlib.pyplot as plt
+import threading
+import socketio
+import cv2
+import numpy as np
+import base64
+app = Flask(__name__)
+
+
+video_frames = []
+sio = socketio.Client(ssl_verify=False)
+
+
+@sio.event
+def connect():
+    print('Connected to server')
+
+
+@sio.on('img')
+def receive_image(data):
+    image_bytes = base64.b64decode(data.split(",")[1])
+
+    # Convert image data to NumPy array
+    nparr = np.frombuffer(image_bytes, np.uint8)
+
+    # Decode image array using OpenCV
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    video_frames.append(img)
+
+
+def get_next_frame():
+    """
+    Retrieve the next frame from the video stream.
+
+    Returns:
+    numpy.ndarray: The next frame in the video stream as a NumPy array.
+    """
+    # print('inside gen_frames')
+    if video_frames:
+        # print(video_frames[0])
+        return True, video_frames.pop(0)
+
+    else:
+        return False, 0
+
+
+def run_client():
+    sio.connect('https://localhost:8080')
+    sio.start_background_task(target=sio.wait)
+
+    # Keep the connection open
+    while True:
+        pass
+
+
+face_cascade = cv2.CascadeClassifier(
+    cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+emotion_data = {'time': [], 'angry': [], 'disgust': [], 'fear': [
+], 'happy': [], 'sad': [], 'surprise': [], 'neutral': []}
+start_time = time.time()
+time_threshold = 20  # Total time threshold (in seconds)
+emotion_interval = 5  # Time interval to capture emotions (in seconds)
+num_emotions = time_threshold // emotion_interval  # Number of emotions to capture
+
+
+def calculate_attention_score():
+    total_weight = 0
+    for emotion, weight_list in emotion_data.items():
+        if emotion != 'time':
+            total_weight += sum(weight_list)
+    return total_weight
+
+
+def detect_emotion():
+    # cap = cv2.VideoCapture(0)
+    emotion_count = 0
+    while True:
+        ret, frame = get_next_frame()
+        if not ret:
+            continue
+
+        gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(
+            gray_image, scaleFactor=1.3, minNeighbors=5)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            face_roi = frame[y:y+h, x:x+w]
+            results = DeepFace.analyze(
+                face_roi, actions=['emotion'], enforce_detection=False)
+            for result in results:
+                emotion = result['dominant_emotion']
+                attention_weight = {
+                    'angry': 0.5,
+                    'disgust': 0.25,
+                    'fear': 0.25,
+                    'happy': 0.75,
+                    'sad': 0.35,
+                    'surprise': 1.0,
+                    'neutral': 0.15,
+                }.get(emotion, 0)
+
+                current_time = time.time() - start_time
+                emotion_data['time'].append(current_time)
+                for key in emotion_data.keys():
+                    if key != 'time':
+                        if key == emotion:
+                            emotion_data[key].append(attention_weight)
+                        else:
+                            emotion_data[key].append(0)
+
+                emotion_count += 1
+                return emotion
+
+        if emotion_count >= num_emotions:
+            total_weight = calculate_attention_score()
+            engagement_status = "Engaged" if total_weight > 1.5 else "Not Engaged"
+            return engagement_status
+
+        time.sleep(emotion_interval)
+
+
+def plot_emotion_graph():
+    if not emotion_data['time']:
+        print("No data available for plotting")
+        return
+
+    total_emotion_weights = []
+    for i, time_point in enumerate(emotion_data['time']):
+        total_weight = sum([emotion_data[emotion][i]
+                           for emotion in emotion_data.keys() if emotion != 'time'])
+        total_emotion_weights.append(total_weight)
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(emotion_data['time'], total_emotion_weights,
+             label='Total Emotion Weight', color='blue')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Total Emotion Weight')
+    plt.title('Total Emotion Weight over Time')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('static/graph.png')
+    plt.close()
+
+
+@app.route('/')
+def index():
+    plot_emotion_graph()
+    emotion = detect_emotion()
+    return render_template('index.html', emotion=emotion)
+
+
+@app.route('/get_engagement_status')
+def get_engagement_status():
+    total_weight = calculate_attention_score()
+    engagement_status = "Engaged" if total_weight > 1.5 else "Not Engaged"
+    return engagement_status
+
+
+def generate_frames():
+    while True:
+        ret, frame = get_next_frame()
+        if not ret:
+            # print('Unable to capture frame')
+            continue
+        else:
+            ret, buffer = cv2.imencode('.jpg', frame)
+            if ret:
+                frame = buffer.tobytes()
+                yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            else:
+                print('Could not convert to JPG')
+
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+if __name__ == "__main__":
+    client_thread = threading.Thread(target=run_client)
+    client_thread.start()
+    app.run(debug=True)
+
+
+
+
+
+
+
+######################################################################
+        Slow Working, Sheraz app.py
+######################################################################
+
+
+
+from flask import Flask, render_template, Response
+import cv2
+from deepface import DeepFace
+import time
+import numpy as np
+import matplotlib.pyplot as plt
+import threading
+import socketio
+import base64
+
+app = Flask(__name__)
+
+video_frames = []
+sio = socketio.Client(ssl_verify=False)
+
+
+@sio.event
+def connect():
+    print('Connected to server')
+
+
+@sio.on('img1')
+def receive_image(data):
+    image_bytes = base64.b64decode(data.split(",")[1])
+
+    # Convert image data to NumPy array
+    nparr = np.frombuffer(image_bytes, np.uint8)
+
+    # Decode image array using OpenCV
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    video_frames.append(img)
+
+
+def get_next_frame():
+    """
+    Retrieve the next frame from the video stream.
+
+    Returns:
+    numpy.ndarray: The next frame in the video stream as a NumPy array.
+    """
+    # print('inside gen_frames')
+    if video_frames:
+        # print(video_frames[0])
+        return True, video_frames.pop(0)
+
+    else:
+        return False, 0
+
+
+# def run_client():
+#     sio.connect('https://localhost:8080')
+#     sio.start_background_task(target=sio.wait)
+#
+    # Keep the connection open
+    # while True:
+    #     pass
+
+
+face_cascade = cv2.CascadeClassifier(
+    cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+emotion_data = {'time': [], 'angry': [], 'disgust': [], 'fear': [
+], 'happy': [], 'sad': [], 'surprise': [], 'neutral': []}
+start_time = time.time()
+time_threshold = 20  # Total time threshold (in seconds)
+emotion_interval = 5  # Time interval to capture emotions (in seconds)
+num_emotions = time_threshold // emotion_interval  # Number of emotions to capture
+
+
+def calculate_attention_score():
+    total_weight = 0
+    for emotion, weight_list in emotion_data.items():
+        if emotion != 'time':
+            total_weight += sum(weight_list)
+    return total_weight
+
+
+def detect_emotion():
+    emotion_count = 0
+    while True:
+        ret, frame = get_next_frame()
+        if not ret:
+            continue
+
+        gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(
+            gray_image, scaleFactor=1.3, minNeighbors=5)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            face_roi = frame[y:y+h, x:x+w]
+            results = DeepFace.analyze(
+                face_roi, actions=['emotion'], enforce_detection=False)
+            for result in results:
+                emotion = result['dominant_emotion']
+                attention_weight = {
+                    'angry': 0.5,
+                    'disgust': 0.25,
+                    'fear': 0.25,
+                    'happy': 0.75,
+                    'sad': 0.35,
+                    'surprise': 1.0,
+                    'neutral': 0.15,
+                }.get(emotion, 0)
+
+                current_time = time.time() - start_time
+                emotion_data['time'].append(current_time)
+                for key in emotion_data.keys():
+                    if key != 'time':
+                        if key == emotion:
+                            emotion_data[key].append(attention_weight)
+                        else:
+                            emotion_data[key].append(0)
+
+                emotion_count += 1
+                return emotion
+
+        if emotion_count >= num_emotions:
+            total_weight = calculate_attention_score()
+            engagement_status = "Engaged" if total_weight > 1.5 else "Not Engaged"
+            return engagement_status
+
+        time.sleep(emotion_interval)
+
+
+def plot_emotion_graph():
+    if not emotion_data['time']:
+        print("No data available for plotting")
+        return
+
+    total_emotion_weights = []
+    dataEmotion = emotion_data["time"]
+    print("plotting graph")
+    print(dataEmotion)
+    for i, time_point in enumerate(dataEmotion):
+        total_weight = sum([emotion_data[emotion][i]
+                           for emotion in emotion_data.keys() if emotion != 'time'])
+        total_emotion_weights.append(total_weight)
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(emotion_data['time'], total_emotion_weights,
+             label='Total Emotion Weight', color='blue')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Total Emotion Weight')
+    plt.title('Total Emotion Weight over Time')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('static/graph.png')
+    plt.close()
+
+
+@app.route('/')
+def index():
+    plot_emotion_graph()
+    emotion = "calculating emotion..."  # detect_emotion()
+    return render_template('index.html', emotion=emotion)
+
+
+def generate_frames():
+    while True:
+        ret, frame = get_next_frame()
+        if not ret:
+            # print('Unable to capture frame')
+            continue
+        else:
+            ret, buffer = cv2.imencode('.jpg', frame)
+            if ret:
+                frame = buffer.tobytes()
+                yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            else:
+                print('Could not convert to JPG')
+
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/get_engagement_status')
+def get_engagement_status():
+    total_weight = calculate_attention_score()
+    engagement_status = "Engaged" if total_weight > 1.5 else "Not Engaged"
+    return engagement_status
+
+@app.route('/get_emotion_status')
+def get_emotion_status():
+    print("getting emotionnnnnnnnnn")
+    emotion = detect_emotion()
+    print("detected emotion " + emotion)
+    return emotion
+
+@app.route('/get_graph')
+def get_graph():
+    plot_emotion_graph()    
+    return "/static/graph.png"
+
+if __name__ == '__main__':
+    # client_thread = threading.Thread(target=run_client)
+    # client_thread.start()
+    sio.connect('https://localhost:8080')
+    # sio.start_background_task(target=sio.wait)
+    app.run(debug=True)
+
+
+######################################################################
+        Slow Working, Sheraz index.html
+######################################################################
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>EmoEngage.AI</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* Add your CSS styles here */
+    body {
+      margin: 0;
+      padding-top: 100px;
+      position: relative;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f0f6ff;
+      /* Light blue background */
+      color: #333;
+    }
+
+    .container {
+      position: relative;
+      text-align: center;
+    }
+
+    .window {
+      width: 300px;
+      height: 300px;
+      border: 2px solid #4a90e2;
+      /* Blue border */
+      border-radius: 20px;
+      /* Increased border radius */
+      margin: 10px;
+      display: inline-block;
+      position: relative;
+      background-color: #fff;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      /* Increased shadow */
+    }
+
+    .title {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #4a90e2;
+      /* Blue background for title */
+      color: #fff;
+      /* White text color */
+      padding: 5px 10px;
+      border-radius: 10px;
+      /* Increased border radius */
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      position: fixed;
+      top: 0;
+      left: 10px;
+      font-weight: bold;
+      color: #fff;
+      /* White text color */
+      background-color: #4a90e2;
+      /* Blue background */
+      padding: 10px;
+      border-radius: 0 0 10px 10px;
+      /* Rounded bottom corners */
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      /* Increased shadow */
+    }
+
+    .top-right {
+      position: fixed;
+      top: 0;
+      right: 10px;
+      list-style: none;
+    }
+
+    .top-right li {
+      display: inline;
+      margin-left: 10px;
+    }
+
+    .top-right a {
+      text-decoration: none;
+      color: #4a90e2;
+      /* Blue link color */
+      background-color: #fff;
+      padding: 8px 16px;
+      border-radius: 20px;
+      /* Increased border radius */
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      transition: background-color 0.3s ease;
+      /* Smooth transition */
+    }
+
+    .top-right a:hover {
+      background-color: #edf3ff;
+      /* Light blue background on hover */
+    }
+  </style>
+</head>
+
+<body>
+  <h1>EmoEngage.AI</h1>
+
+  <div class="container">
+    <div class="window" id="videoFeedWindow">
+      <div class="title">Video Feed</div>
+      <img src="{{ url_for('video_feed') }}" width="300" height="300">
+    </div>
+    <div class="window" id="graphWindow">
+      <div class="title">Graph</div>
+      <img id="graph" src="{{ url_for('static', filename='graph.png') }}" width="300" height="300">
+    </div>
+    <div class="window" id="engagementWindow">
+      <div class="title">Engagement</div>
+      <p id="engagementStatus">Engagement Status: Loading...</p>
+
+      <p id="detectedEmotion">Detected Emotion: {{ emotion }}</p>
+    </div>
+  </div>
+
+  <!-- Add your JavaScript code here -->
+  <script>
+    // Function to update the engagement status
+    function updateEngagementStatus() {
+      // Make an AJAX request to fetch the updated engagement status
+      fetch('/get_engagement_status')
+        .then(response => response.text())
+        .then(data => {
+          console.log("engagement: " +data)
+          document.getElementById('engagementStatus').innerText = "Engagement Status: " + data;
+          setTimeout(updateEngagementStatus,3000)
+        })
+        .catch(error => {
+          console.error('Error fetching engagement status:', error);
+          document.getElementById('engagementStatus').innerText = "Error fetching engagement status";
+        });
+
+    }
+
+    //function to update the emotion status
+    function updateEmotionStatus() {
+      // Make an AJAX request to fetch the updated engagement status
+      console.log("fetching emotion...")
+      fetch('/get_emotion_status')
+        .then(response => response.text())
+        .then(data => {
+          console.log("emotion: " +data)
+          document.getElementById('detectedEmotion').innerText = "Detection Emotion: " + data;
+          updateGraph()
+        })
+        .catch(error => {
+          console.error('Error fetching emotion status:', error);
+          document.getElementById('detectedEmotion').innerText = "Error fetching emotion status";
+        });
+    }
+
+    //function to update graph
+    function updateGraph(){
+      fetch('/get_graph')
+        .then(response => response.text())
+        .then(data => {
+          console.log("graph plotted: " +data)
+          document.getElementById('graph').src = data
+          setTimeout(updateEmotionStatus,3000)
+        })
+        .catch(error => {
+          console.error('Error fetching graph:', error);
+        });
+    }
+
+    updateEmotionStatus()
+    updateEngagementStatus()
+  
+  </script>
+</body>
+
+</html>
+
+
+
+
+######################################################################
+        With Tkinter error
+######################################################################
+
+
+
+
+from flask import Flask, render_template, Response
+import cv2
+from deepface import DeepFace
+import time
+import numpy as np
+import matplotlib.pyplot as plt
+# import threading
+import socketio
+import base64
+
+app = Flask(__name__)
+
+video_frames = []
+sio = socketio.Client(ssl_verify=False)
+
+
+@sio.event
+def connect():
+    print('Connected to server')
+
+
+@sio.on('img1')
+def receive_image(data):
+    image_bytes = base64.b64decode(data.split(",")[1])
+
+    # Convert image data to NumPy array
+    nparr = np.frombuffer(image_bytes, np.uint8)
+
+    # Decode image array using OpenCV
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    video_frames.append(img)
+
+
+def get_next_frame():
+    """
+    Retrieve the next frame from the video stream.
+
+    Returns:
+    numpy.ndarray: The next frame in the video stream as a NumPy array.
+    """
+    # print('inside gen_frames')
+    if video_frames:
+        # print(video_frames[0])
+        return True, video_frames.pop(0)
+
+    else:
+        return False, 0
+
+
+# def run_client():
+#     sio.connect('https://localhost:8080')
+#     sio.start_background_task(target=sio.wait)
+#
+    # Keep the connection open
+    # while True:
+    #     pass
+
+
+face_cascade = cv2.CascadeClassifier(
+    cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+emotion_data = {'time': [], 'angry': [], 'disgust': [], 'fear': [
+], 'happy': [], 'sad': [], 'surprise': [], 'neutral': []}
+start_time = time.time()
+time_threshold = 20  # Total time threshold (in seconds)
+emotion_interval = 5  # Time interval to capture emotions (in seconds)
+num_emotions = time_threshold // emotion_interval  # Number of emotions to capture
+
+
+def calculate_attention_score():
+    total_weight = 0
+    for key, value in emotion_data.items():
+        if key != 'time':
+            total_weight += sum(value)
+    return total_weight
+
+
+def detect_emotion():
+    emotion_count = 0
+    while True:
+        ret, frame = get_next_frame()
+        if not ret:
+            continue
+
+        gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(
+            gray_image, scaleFactor=1.3, minNeighbors=5)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            face_roi = frame[y:y+h, x:x+w]
+            results = DeepFace.analyze(
+                face_roi, actions=['emotion'], enforce_detection=False)
+            for result in results:
+                emotion = result['dominant_emotion']
+                attention_weight = {
+                    'angry': 0.5,
+                    'disgust': 0.25,
+                    'fear': 0.25,
+                    'happy': 0.75,
+                    'sad': 0.35,
+                    'surprise': 1.0,
+                    'neutral': 0.15,
+                }.get(emotion, 0)
+
+                current_time = time.time() - start_time
+                emotion_data['time'].append(current_time)
+                for key in emotion_data.keys():
+                    if key != 'time':
+                        if key == emotion:
+                            emotion_data[key].append(attention_weight)
+                        else:
+                            emotion_data[key].append(0)
+
+                emotion_count += 1
+                return emotion
+
+        if emotion_count >= num_emotions:
+            total_weight = calculate_attention_score()
+            engagement_status = "Engaged" if total_weight > 1.5 else "Not Engaged"
+            return engagement_status
+
+        # time.sleep(emotion_interval)
+
+
+def plot_emotion_graph():
+    if not emotion_data['time']:
+        print("No data available for plotting")
+        return
+
+    total_emotion_weights = []
+    dataEmotion = emotion_data["time"]
+    print("plotting graph")
+    print(dataEmotion)
+    for i, time_point in enumerate(dataEmotion):
+        total_weight = sum([emotion_data[emotion][i]
+                           for emotion in emotion_data.keys() if emotion != 'time'])
+        total_emotion_weights.append(total_weight)
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(emotion_data['time'], total_emotion_weights,
+             label='Total Emotion Weight', color='blue')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Attention Level')
+    plt.title('Total Attention Level over Time')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('static/graph.png')
+    plt.close()
+
+
+@app.route('/')
+def index():
+    plot_emotion_graph()
+    emotion = "calculating emotion..."  # detect_emotion()
+    return render_template('index.html', emotion=emotion)
+
+
+def generate_frames():
+    while True:
+        ret, frame = get_next_frame()
+        if not ret:
+            # print('Unable to capture frame')
+            continue
+        else:
+            ret, buffer = cv2.imencode('.jpg', frame)
+            if ret:
+                frame = buffer.tobytes()
+                yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            else:
+                print('Could not convert to JPG')
+
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/get_engagement_status')
+def get_engagement_status():
+    total_weight = calculate_attention_score()
+    engagement_status = "Engaged" if total_weight > 1.5 else "Not Engaged"
+    return engagement_status
+
+
+@app.route('/get_emotion_status')
+def get_emotion_status():
+    print("getting emotionnnnnnnnnn")
+    emotion = detect_emotion()
+    print("detected emotion " + emotion)
+    return emotion
+
+
+@app.route('/get_graph')
+def get_graph():
+    plot_emotion_graph()
+    return "/static/graph.png"
+
+
+if __name__ == '__main__':
+    # client_thread = threading.Thread(target=run_client)
+    # client_thread.start()
+    sio.connect('https://localhost:8080')
+    # sio.start_background_task(target=sio.wait)
+    app.run(debug=True)
+
+
+######################################################################
+        Style.css webrtc
+######################################################################
+@media screen and (max-width: 800px) {
+    /* and (max-height: 1600px) */
+
+    .video-call-wrapper {
+        position: relative;
+    }
+
+    .video-participant1 {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .video-participant2 {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    /* .video-participant {
+        width: 50%;
+        height: 33.3%;
+    } */
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+########################################
+        second graph half
+########################################
+
+
+
+
+import base64
+import socketio
+import threading
+import matplotlib.pyplot as plt
+from flask import Flask, render_template, Response
+import cv2
+from deepface import DeepFace
+import time
+import numpy as np
+import matplotlib
+import tensorflow as tf
+from keras.models import load_model
+matplotlib.use('Agg')
+
+
+app = Flask(__name__)
+
+video_frames = []
+sio = socketio.Client(ssl_verify=False)
+lock = threading.Lock()
+
+
+@sio.event
+def connect():
+    print('Connected to server')
+
+
+@sio.on('img1')
+def receive_image(data):
+    image_bytes = base64.b64decode(data.split(",")[1])
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    with lock:
+        video_frames.append(img)
+
+
+def run_client():
+    sio.connect('https://localhost:8080')
+    sio.wait()
+
+
+def get_next_frame():
+    with lock:
+        if video_frames:
+            return True, video_frames.pop(0)
+        else:
+            return False, None
+
+
+face_cascade = cv2.CascadeClassifier(
+    cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+######################################
+######################################
+engagement_labels = ['Not Engaged', 'Engaged']
+face_cascade2 = cv2.CascadeClassifier(
+    cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+######################################
+######################################
+emotion_data = {'time': [], 'angry': [], 'disgust': [], 'fear': [],
+                'happy': [], 'sad': [], 'surprise': [], 'neutral': []}
+total_time = 0
+engaged_time = 0
+percentage_engaged = 0.0
+times = []
+statuses = []
+start_time = time.time()
+time_threshold = 20
+emotion_interval = 5
+num_emotions = time_threshold // emotion_interval
+
+
+def calculate_attention_score():
+    total_weight = 0
+    for key, value in emotion_data.items():
+        if key != 'time':
+            total_weight += sum(value)
+    return total_weight
+
+
+def detect_emotion():
+    emotion_count = 0
+    while True:
+        ret, frame = get_next_frame()
+        if not ret:
+            continue
+
+        gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(
+            gray_image, scaleFactor=1.3, minNeighbors=5)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            face_roi = frame[y:y+h, x:x+w]
+            results = DeepFace.analyze(
+                face_roi, actions=['emotion'], enforce_detection=False)
+            for result in results:
+                emotion = result['dominant_emotion']
+                attention_weight = {
+                    'angry': 0.5,
+                    'disgust': 0.25,
+                    'fear': 0.25,
+                    'happy': 0.75,
+                    'sad': 0.35,
+                    'surprise': 1.0,
+                    'neutral': 0.15,
+                }.get(emotion, 0)
+
+                current_time = time.time() - start_time
+                emotion_data['time'].append(current_time)
+                for key in emotion_data.keys():
+                    if key != 'time':
+                        if key == emotion:
+                            emotion_data[key].append(attention_weight)
+                        else:
+                            emotion_data[key].append(0)
+
+                emotion_count += 1
+                return emotion
+
+        if emotion_count >= num_emotions:
+            total_weight = calculate_attention_score()
+            engagement_status = "Engaged" if total_weight > 1.5 else "Not Engaged"
+            return engagement_status
+############################################################################################
+            # Engagement
+############################################################################################
+
+
+def detect_enagement():
+    while True:
+        ret, frame = get_next_frame()
+        if not ret:
+            continue
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # Detect faces in the frame
+        faces = face_cascade2.detectMultiScale(
+            gray, scaleFactor=1.5, minNeighbors=10, minSize=(30, 30))
+        status = ''
+        if len(faces) > 0:
+            status = "Engaged"
+        else:
+            status = "Not Engaged"
+        # Calculate the elapsed time since the start
+        elapsed_time = time.time() - start_time
+
+        # Store the time and status
+        times.append(elapsed_time)
+        statuses.append(status)
+
+        # Calculate total and engaged time
+        total_time += 1
+        if status == 'engaged':
+            engaged_time += 1
+
+        # Calculate percentage of engaged time
+        percentage_engaged = (engaged_time / total_time) * \
+            100 if total_time > 0 else 0
+        yield status
+
+def enagagment_graph():
+    
+
+    # Plot the data
+    plt.figure()
+    plt.plot(times, statuses)
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Status')
+    plt.yticks([0, 1], ['Not Engaged', 'Engaged'])
+    plt.title(f'Engagement Status over Time')
+
+    # Add percentage engaged text
+    plt.text(0.5, 0.1, f'Percentage Engaged: {percentage_engaged:.2f}%',
+             horizontalalignment='center', verticalalignment='center',
+             transform=plt.gca().transAxes, fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
+
+    plt.savefig(f'static/graph2.png')
+    plt.close()
+
+
+############################################################################################
+############################################################################################
+
+
+def plot_emotion_graph():
+    if not emotion_data['time']:
+        print("No data available for plotting")
+        return
+
+    total_emotion_weights = []
+    dataEmotion = emotion_data["time"]
+    print("plotting graph")
+    print(dataEmotion)
+    for i, time_point in enumerate(dataEmotion):
+        total_weight = sum([emotion_data[emotion][i]
+                           for emotion in emotion_data.keys() if emotion != 'time'])
+        total_emotion_weights.append(total_weight)
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(emotion_data['time'], total_emotion_weights,
+             label='Total Emotion Weight', color='blue')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Weighted Emotion')
+    plt.title('Total Attention Level over Time by Weighted Emotions')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('static/graph.png')
+    plt.close()
+
+
+@app.route('/')
+def index():
+    plot_emotion_graph()
+    enagagment_graph()
+    emotion = "calculating emotion..."
+    return render_template('index2.html')
+
+
+def generate_frames():
+    while True:
+        ret, frame = get_next_frame()
+        if not ret:
+            continue
+        else:
+            ret, buffer = cv2.imencode('.jpg', frame)
+            if ret:
+                frame = buffer.tobytes()
+                yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/get_engagement_status')
+def get_engagement_status():
+    engagement_status = detect_enagement()
+    # enagagment_graph(engagement_status)
+    return engagement_status
+
+
+@app.route('/get_emotion_status')
+def get_emotion_status():
+    emotion = detect_emotion()
+    return emotion
+
+
+@app.route('/get_graph')
+def get_graph():
+    plot_emotion_graph()
+    return "/static/graph.png"
+
+
+@app.route('/get_second_graph')
+def get_graph_two():
+    enagagment_graph()
+    return "/static/graph2.png"
+
+
+if __name__ == '__main__':
+    client_thread = threading.Thread(target=run_client)
+    client_thread.daemon = True
+    client_thread.start()
+    app.run(debug=True)

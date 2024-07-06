@@ -1,0 +1,18 @@
+numpy>=1.14.0
+pandas>=0.23.4
+gdown>=3.10.1
+tqdm>=4.30.0
+Pillow>=5.2.0
+opencv-python>=4.5.5.64
+keras>=2.2.0
+Flask>=1.1.2
+mtcnn>=0.1.0
+retina-face>=0.0.1
+fire>=0.4.0
+gunicorn>=20.1.0
+Tensorflow == 2.10.1
+Flask >=3.0.0
+Matplotlib >=3.6.0
+flask_sslify >=0.1.5
+flask_socketio >=5.3.6
+
