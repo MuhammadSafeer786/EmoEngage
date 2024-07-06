@@ -15,7 +15,7 @@ Use Pyhton 3.9.10 for this project. Other requirments for flask app are listed i
 # Follow these instructions to run it.
 
 1. Open 3 Terminals or CMD at once.
-2. Navigate to folders Comm, EmoEngage, WebRTC using the the terminals you just opened using cd command 'For Windows & Maybe for Linux too' e.g.
+2. Navigate to folders Comm, FlaskApp, WebRTC using the the terminals you just opened using cd command 'For Windows & Maybe for Linux too' e.g.
 ```shell
 cd Path\to\Comm
 ```
@@ -23,7 +23,7 @@ cd Path\to\Comm
 cd Path\to\WebRTC
 ```
 ```shell
-cd Path\to\EmoEngage
+cd Path\to\FlaskApp
 ```
 3. In the terminal of \WebRTC run:
 ```shell
@@ -46,8 +46,8 @@ node server.js
 ```shell
 https://localhost:8181
 ```
-6. open app.py or app2.py or app3.py depending on which algorithm you want to use. Open these files in any IDE.
-7. In your browser go to either of the following sites depending upon which app.py you opened "Check the Code": 
+6. Go to FlaskApp, open app.py or app2.py or app3.py depending on which algorithm you want to use. Open these files in any IDE and run.
+7. In your browser go to either of the following sites depending upon which 'app.py' you opened "Check the Code": 
 ```shell
 http://localhost:5000
 ```
