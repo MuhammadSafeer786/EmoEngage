@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>EmoEngage.AI</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* Add your CSS styles here */
+        body {
+            margin: 0;
+            padding-top: 100px;
+            position: relative;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f6ff;
+            /* Light blue background */
+            color: #333;
+        }
+
+        .container {
+            position: relative;
+            text-align: center;
+        }
+
+        .window {
+            width: 300px;
+            height: 300px;
+            border: 2px solid #4a90e2;
+            /* Blue border */
+            border-radius: 20px;
+            /* Increased border radius */
+            margin: 10px;
+            display: inline-block;
+            position: relative;
+            background-color: #fff;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            /* Increased shadow */
+        }
+
+        .title {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4a90e2;
+            /* Blue background for title */
+            color: #fff;
+            /* White text color */
+            padding: 5px 10px;
+            border-radius: 10px;
+            /* Increased border radius */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            position: fixed;
+            top: 0;
+            left: 10px;
+            font-weight: bold;
+            color: #fff;
+            /* White text color */
+            background-color: #4a90e2;
+            /* Blue background */
+            padding: 10px;
+            border-radius: 0 0 10px 10px;
+            /* Rounded bottom corners */
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            /* Increased shadow */
+        }
+
+        .top-right {
+            position: fixed;
+            top: 0;
+            right: 10px;
+            list-style: none;
+        }
+
+        .top-right li {
+            display: inline;
+            margin-left: 10px;
+        }
+
+        .top-right a {
+            text-decoration: none;
+            color: #4a90e2;
+            /* Blue link color */
+            background-color: #fff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            /* Increased border radius */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s ease;
+            /* Smooth transition */
+        }
+
+        .top-right a:hover {
+            background-color: #edf3ff;
+            /* Light blue background on hover */
+        }
+    </style>
+</head>
+
+<body>
+    <h1>EmoEngage.AI</h1>
+
+    <div class="container">
+        <div class="window" id="videoFeedWindow1">
+            <div class="title">Video Feed</div>
+            <img id="videoFeed1" width="300" height="300">
+        </div>
+        <div class="window" id="graphWindow1">
+            <div class="title">Graph</div>
+            <img id="graph1" width="300" height="300">
+        </div>
+        <div class="window" id="engagementWindow1">
+            <div class="title">Engagement</div>
+            <p id="engagementStatus1">Engagement Status: Loading...</p>
+
+            <p id="detectedEmotion1">Detected Emotion: {{ emotion }}</p>
+        </div>
+    </div>
+</body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.2/socket.io.js"></script>
+<script>
+    // Connect to the SocketIO server
+    const socket = io.connect('https://localhost:8080');
+
+    // Listen for video frames from the server
+    socket.on('vid1', function (frameData) {
+        // Create an image element and set its source to the received frame data
+        const img = document.getElementById('videoFeed1');
+        img.src = `${frameData}`;
+
+        // Append the image to the video container
+        // const videoContainer = document.getElementById('video-container');
+        // videoContainer.appendChild(img);
+    });
+</script>
+
+</html>

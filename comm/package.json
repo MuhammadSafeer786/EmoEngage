@@ -1,0 +1,21 @@
+{
+  "name": "comm",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server2.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "camera-capture": "^0.0.11",
+    "cors": "^2.8.5",
+    "deepface": "^1.0.0",
+    "express": "^4.19.2",
+    "fs": "^0.0.1-security",
+    "https": "^1.0.0",
+    "path": "^0.12.7",
+    "socket.io": "^4.7.5"
+  }
+}

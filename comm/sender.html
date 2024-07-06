@@ -1,0 +1,114 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Stream</title>
+</head>
+
+<body>
+    <video id="video" width="640" height="480" autoplay></video>
+    <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.1.1/socket.io.js"></script>
+    <script>
+        const socket = io.connect('http://localhost:8080');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Start capturing video from webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then((stream) => {
+                video.srcObject = stream;
+
+                // Check if the stream is valid
+                if (!stream) {
+                    console.error('Stream is not valid or null.');
+                } else {
+                    console.log('Stream is valid.');
+                }
+            })
+
+            .catch((error) => {
+                console.error('Error accessing webcam:', error);
+            });
+
+        function resizeImage(imageData, targetWidth, targetHeight) {
+            return new Promise((resolve, reject) => {
+                // Use the existing canvas and context variables
+                // Create an image element
+                let image = new Image();
+
+                // Set the source of the image as the imageData (assumed to be a data URL)
+                image.src = imageData;
+
+                // When the image is loaded, draw it onto the canvas
+                image.onload = () => {
+                    // Resize the canvas
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+
+                    // Draw the image onto the canvas
+                    ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+                    // Resolve with the data URL of the resized image
+                    resolve(canvas.toDataURL('image/jpeg'));
+                };
+
+                // Handle errors if the image fails to load
+                image.onerror = (error) => {
+                    reject(error);
+                };
+            });
+        }
+
+
+        function compressImage(imageData, quality) {
+
+            // Create an image element
+            const image = new Image();
+
+            // Set the source of the image as the imageData (assumed to be a data URL)
+            image.src = imageData;
+
+            return new Promise((resolve, reject) => {
+                // When the image is loaded, draw it onto the canvas
+                image.onload = () => {
+                    // Set canvas dimensions to match image dimensions
+                    canvas.width = image.width;
+                    canvas.height = image.height;
+
+                    // Draw the image onto the canvas
+                    ctx.drawImage(image, 0, 0);
+
+                    // Resolve with the data URL of the compressed image
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+
+                // Handle errors if the image fails to load
+                image.onerror = (error) => {
+                    reject(error);
+                };
+            });
+        }
+
+        // Capture and send video frames to server
+        setInterval(() => {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL('image/jpeg');
+            resizeImage(imageData, 48, 48)
+                .then((resizedImageData) => {
+                    compressImage(resizedImageData, 0.5).then((compressed) => {
+                        socket.emit('image', compressed);
+                    })
+
+                })
+                .catch((error) => {
+                    console.error('Error resizing image:', error);
+                });
+        }, 33); // Adjust the interval for desired FPS
+    </script>
+</body>
+
+</html> -->
